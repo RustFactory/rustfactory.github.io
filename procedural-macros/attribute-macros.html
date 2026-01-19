@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fundamentals of Declarative Macros - Rust Mastery</title>
+        <title>Attribute Macros - Rust Mastery</title>
 
 
         <!-- Custom HTML head -->
@@ -177,76 +177,206 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="chapter-1-fundamentals-of-declarative-macros-nature-and-introduction"><a class="header" href="#chapter-1-fundamentals-of-declarative-macros-nature-and-introduction">Chapter 1: Fundamentals of Declarative Macros: Nature and Introduction</a></h1>
-<h2 id="11-core-definition-of-declarative-macros"><a class="header" href="#11-core-definition-of-declarative-macros">1.1 Core Definition of Declarative Macros</a></h2>
-<p>Declarative macros are syntax extension tools provided by Rust based on “pattern matching-code expansion”. Defined via the <code>macro_rules!</code> keyword, they essentially match, replace, and generate code snippets (TokenTree) at compile time, ultimately outputting code that conforms to Rust syntax. Unlike regular functions and generics, macros do not participate in runtime logic and only complete code transformation during the compilation phase. Thus, they can achieve <em>syntax abstraction scenarios</em> that generics and functions cannot cover (such as generating <code>vec![]</code> literals).</p>
-<p><strong>Core advantages</strong>: Lightweight with no additional compilation dependencies, supporting syntax snippet-level reuse; <strong>Core limitations</strong>: Syntax is independent of Rust’s main syntax, error messages are obscure, and complex logic processing is not supported.</p>
-<h2 id="12-minimal-viable-macro-hello-macro-example"><a class="header" href="#12-minimal-viable-macro-hello-macro-example">1.2 Minimal Viable Macro: Hello Macro Example</a></h2>
-<p>Let’s start with the simplest macro to understand its basic structure. The following example implements a macro that prints fixed information:</p>
-<pre class="playground"><code class="language-rust edition2024">
-// Define a declarative macro
-macro_rules! hello_macro {
-    // Matching rule: no-argument pattern
-    () =&gt; {
-        // Expanded code
-        println!("Hello, Rust Declarative Macro!");
+                        <h1 id="chapter-3-attribute-macros"><a class="header" href="#chapter-3-attribute-macros">Chapter 3: Attribute Macros</a></h1>
+<h2 id="31-how-attribute-macros-work"><a class="header" href="#31-how-attribute-macros-work">3.1 How Attribute Macros Work</a></h2>
+<p>Attribute macros modify or augment Rust items (functions, structs, modules, etc.) by applying custom attributes. Unlike derive macros, which only generate trait implementations, attribute macros can alter the annotated item itself or generate additional code (e.g., functions, constants) alongside it.</p>
+<p>To define an attribute macro, use the <code>#[proc_macro_attribute]</code> attribute on a function. The function signature differs from other procedural macros: it takes two <code>TokenStream</code> arguments—one for the attribute’s arguments (if any) and one for the annotated item. It returns a <code>TokenStream</code> representing the modified item (and any generated code).</p>
+<h2 id="32-implementing-a-simple-attribute-macro"><a class="header" href="#32-implementing-a-simple-attribute-macro">3.2 Implementing a Simple Attribute Macro</a></h2>
+<p>Let’s create an attribute macro <code>#[log_execution]</code> that adds logging before and after a function’s execution. The macro will print the function name when it starts and finishes.</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// my-proc-macros/src/lib.rs
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{parse_macro_input, ItemFn, LitStr};
+
+#[proc_macro_attribute]
+pub fn log_execution(attr: TokenStream, item: TokenStream) -&gt; TokenStream {
+    // Parse the attribute arguments (optional message)
+    let msg = if attr.is_empty() {
+        LitStr::new("Executing function", proc_macro2::Span::call_site())
+    } else {
+        parse_macro_input!(attr as LitStr)
     };
+    
+    // Parse the annotated function
+    let mut func = parse_macro_input!(item as ItemFn);
+    
+    // Extract the function name
+    let func_name = &amp;func.sig.ident;
+    
+    // Modify the function body to add logging
+    let original_body = func.block;
+    func.block = syn::parse_quote!({
+        println!("{}: {}", #msg, stringify!(#func_name));
+        let result = #original_body;
+        println!("Completed executing: {}", stringify!(#func_name));
+        result
+    });
+    
+    // Generate the modified function
+    TokenStream::from(quote! { #func })
+}
+
+<span class="boring">}</span></code></pre>
+<p>Use the attribute macro in a binary crate:</p>
+<pre class="playground"><code class="language-rust edition2024">// src/main.rs
+use my_proc_macros::log_execution;
+
+#[log_execution("Starting")]
+fn add(a: i32, b: i32) -&gt; i32 {
+    a + b
+}
+
+#[log_execution] // Uses default message
+fn greet(name: &amp;str) {
+    println!("Hello, {}!", name);
 }
 
 fn main() {
-    // Call the macro (parentheses are optional but recommended for consistency)
-    hello_macro!(); // Expands to println!(...) at compile time
-}</code></pre>
-<p>Code Explanation:</p>
-<ul>
-<li>
-<p><code>macro_rules! macro_name { ... }</code>: The <strong>fixed definition format</strong> for declarative macros.</p>
-</li>
-<li>
-<p><code>() =&gt; { ... }</code>: A matching arm. <code>()</code> is the pattern (representing a no-argument call), and the code block after <code>=&gt;</code> is expanded when the pattern matches successfully.</p>
-</li>
-<li>
-<p>Macro calls require <code>!</code>: Used to distinguish macros from functions/methods, informing the compiler to perform <em>macro expansion</em> here.</p>
-</li>
-</ul>
-<h2 id="13-macro-matching-patterns-and-metavariables"><a class="header" href="#13-macro-matching-patterns-and-metavariables">1.3 Macro Matching Patterns and Metavariables</a></h2>
-<p>The core capability of macros is to match different syntax snippets, capture matched content via <strong>metavariables</strong>, and reuse it. Metavariables must specify a “fragment specifier” (such as expression, identifier, statement). Common fragment specifiers are as follows:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Fragment Specifier</th><th>Description</th><th>Example</th></tr>
-</thead>
-<tbody>
-<tr><td>expr</td><td>Any expression</td><td>1+2, foo(), x&gt;3</td></tr>
-<tr><td>ident</td><td>Identifier (variable name, function name, etc.)</td><td>x, hello_world, User</td></tr>
-<tr><td>stmt</td><td>Single statement</td><td>let a = 5;, foo();</td></tr>
-<tr><td>block</td><td>Code block</td><td>{ let a = 5; a+1; }</td></tr>
-<tr><td>ty</td><td>Type</td><td>i32, String, &amp;[u8]</td></tr>
-<tr><td>Example: Implement a macro that captures an expression and prints its content and result:</td><td></td><td></td></tr>
-</tbody>
-</table>
-</div>
-<pre class="playground"><code class="language-rust edition2024">
-macro_rules! print_expr {
-    // Match any expression, capture with $expr:expr, where $expr is the metavariable name
-    ($expr:expr) =&gt; {
-        println!("Expression `{} = {}`", stringify!($expr), $expr);
+    let sum = add(2, 3);
+    println!("Sum: {}", sum);
+    
+    greet("Bob");
+}
+</code></pre>
+<p>Output:</p>
+<h2 id="33-attribute-macros-with-complex-arguments"><a class="header" href="#33-attribute-macros-with-complex-arguments">3.3 Attribute Macros with Complex Arguments</a></h2>
+<p>Attribute macros can accept structured arguments (e.g., key-value pairs) by parsing the attribute token stream into a custom AST. Let’s extend <code>#[log_execution]</code> to support a <code>level</code> argument (e.g., <code>#[log_execution(level = "debug")]</code>) that controls the logging level.</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// my-proc-macros/src/lib.rs
+use syn::{Meta, MetaNameValue, NestedMeta, Lit, LitStr};
+
+#[proc_macro_attribute]
+pub fn log_execution(attr: TokenStream, item: TokenStream) -&gt; TokenStream {
+    // Parse attribute arguments into a MetaList (e.g., log_execution(level = "debug", msg = "Start"))
+    let meta_list = parse_macro_input!(attr as Meta);
+    let mut level = LitStr::new("info", proc_macro2::Span::call_site());
+    let mut msg = LitStr::new("Executing function", proc_macro2::Span::call_site());
+    
+    // Process each key-value pair in the attribute
+    if let Meta::List(list) = meta_list {
+        for nested_meta in list.nested {
+            if let NestedMeta::Meta(Meta::NameValue(name_value)) = nested_meta {
+                let key = name_value.path.is_ident("level");
+                let msg_key = name_value.path.is_ident("msg");
+                
+                if key {
+                    if let Lit::Str(lit_str) = name_value.lit {
+                        level = lit_str;
+                    }
+                } else if msg_key {
+                    if let Lit::Str(lit_str) = name_value.lit {
+                        msg = lit_str;
+                    }
+                }
+            }
+        }
+    }
+    
+    let func = parse_macro_input!(item as ItemFn);
+    let func_name = &amp;func.sig.ident;
+    
+    // Generate logging code based on the level
+    let log_start = match level.value().as_str() {
+        "debug" =&gt; quote! { eprintln!("[DEBUG] {}: {}", #msg, stringify!(#func_name)); },
+        "warn" =&gt; quote! { eprintln!("[WARN] {}: {}", #msg, stringify!(#func_name)); },
+        _ =&gt; quote! { println!("[INFO] {}: {}", #msg, stringify!(#func_name)); },
     };
+    
+    let log_end = quote! {
+        println!("[{}] Completed: {}", #level, stringify!(#func_name));
+    };
+    
+    // Modify the function body
+    let original_body = func.block;
+    let modified_body = syn::parse_quote!({
+        #log_start
+        let result = #original_body;
+        #log_end
+        result
+    });
+    
+    let mut modified_func = func;
+    modified_func.block = modified_body;
+    
+    TokenStream::from(quote! { #modified_func })
+}
+
+<span class="boring">}</span></code></pre>
+<p>Usage example:</p>
+<pre class="playground"><code class="language-rust edition2024">#[log_execution(level = "debug", msg = "Running calculation")]
+fn multiply(a: i32, b: i32) -&gt; i32 {
+    a * b
 }
 
 fn main() {
-    let x = 10;
-    print_expr!(x + 5); // Expands to println!("Expression `x + 5 = {}`", x + 5);
-    print_expr!(2 * 3 + 4); // Expands to the corresponding print statement
-}</code></pre>
-<p>Key Knowledge: <code>stringify!</code> is a <strong>built-in Rust macro</strong> that converts the syntax snippet corresponding to a metavariable into a string literal, commonly used for debugging or printing the expression itself.</p>
-<h2 id="14-chapter-exercises"><a class="header" href="#14-chapter-exercises">1.4 Chapter Exercises</a></h2>
+    let product = multiply(4, 5);
+    println!("Product: {}", product);
+}
+</code></pre>
+<p>Output:</p>
+<h2 id="34-attribute-macros-on-structsenums"><a class="header" href="#34-attribute-macros-on-structsenums">3.4 Attribute Macros on Structs/Enums</a></h2>
+<p>Attribute macros aren’t limited to functions—they can be applied to structs, enums, modules, and more. Let’s create an attribute macro <code>#[rename_struct]</code> that renames a struct and generates a type alias for the original name.</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// my-proc-macros/src/lib.rs
+use syn::{parse_macro_input, ItemStruct, Ident};
+
+#[proc_macro_attribute]
+pub fn rename_struct(attr: TokenStream, item: TokenStream) -&gt; TokenStream {
+    // Parse the new name from the attribute
+    let new_name = parse_macro_input!(attr as Ident);
+    
+    // Parse the original struct
+    let mut struct_def = parse_macro_input!(item as ItemStruct);
+    let original_name = &amp;struct_def.ident;
+    
+    // Rename the struct
+    struct_def.ident = new_name.clone();
+    
+    // Generate a type alias for the original name
+    let type_alias = quote! {
+        type #original_name = #new_name;
+    };
+    
+    // Return the modified struct and type alias
+    TokenStream::from(quote! {
+        #struct_def
+        #type_alias
+    })
+}
+
+<span class="boring">}</span></code></pre>
+<p>Usage example:</p>
+<pre class="playground"><code class="language-rust edition2024">use my_proc_macros::rename_struct;
+
+#[rename_struct(NewUser)]
+struct User {
+    name: String,
+    age: u32,
+}
+
+fn main() {
+    // Both NewUser and User are valid types (User is a type alias)
+    let user1: NewUser = NewUser { name: "Alice".to_string(), age: 30 };
+    let user2: User = User { name: "Bob".to_string(), age: 25 };
+    
+    println!("{}", user1.name);
+    println!("{}", user2.age);
+}
+</code></pre>
+<h2 id="35-practice-exercises"><a class="header" href="#35-practice-exercises">3.5 Practice Exercises</a></h2>
 <ol>
 <li>
-<p>Basic Exercise: Implement a <code>log_info!</code> macro that accepts any string literal and expands to <code>println!("[INFO] string content")</code>. Example call: <code>log_info!("Service started successfully")</code>.</p>
+<p>Create an attribute macro <code>#[cache_result]</code> that caches the result of a function with no arguments. The function should return the cached result on subsequent calls.</p>
 </li>
 <li>
-<p>Advanced Exercise: Implement a <code>swap!</code> macro that accepts two variables of the same type and expands to code that swaps their values (no need to consider ownership, only for primitive types). Example call: <code>swap!(a, b)</code>. After implementation, verify that <code>let mut a=1, b=2; swap!(a,b);</code> results in <code>a=2, b=1</code>.</p>
+<p>Implement an attribute macro <code>#[validate_args]</code> for functions that checks if integer arguments are positive. If not, panic with a custom message. Support <code>#[validate_args(min = 0)]</code> to set a minimum value.</p>
+</li>
+<li>
+<p>Write an attribute macro <code>#[serialize_to_json]</code> for structs that generates a method <code>to_json(&amp;self) -&gt; String</code> using <code>serde</code> and <code>serde_json</code>. Ensure the struct derives <code>Serialize</code> automatically.</p>
 </li>
 </ol>
 
@@ -254,11 +384,11 @@ fn main() {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../declarative-macros/declarative-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../procedural-macros/derive-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../procedural-macros/function-like-procedural-macros.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -268,11 +398,11 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../declarative-macros/declarative-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../procedural-macros/derive-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../procedural-macros/function-like-procedural-macros.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

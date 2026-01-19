@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fundamentals of Declarative Macros - Rust Mastery</title>
+        <title>Hand-On Project - Rust Mastery</title>
 
 
         <!-- Custom HTML head -->
@@ -177,88 +177,313 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="chapter-1-fundamentals-of-declarative-macros-nature-and-introduction"><a class="header" href="#chapter-1-fundamentals-of-declarative-macros-nature-and-introduction">Chapter 1: Fundamentals of Declarative Macros: Nature and Introduction</a></h1>
-<h2 id="11-core-definition-of-declarative-macros"><a class="header" href="#11-core-definition-of-declarative-macros">1.1 Core Definition of Declarative Macros</a></h2>
-<p>Declarative macros are syntax extension tools provided by Rust based on “pattern matching-code expansion”. Defined via the <code>macro_rules!</code> keyword, they essentially match, replace, and generate code snippets (TokenTree) at compile time, ultimately outputting code that conforms to Rust syntax. Unlike regular functions and generics, macros do not participate in runtime logic and only complete code transformation during the compilation phase. Thus, they can achieve <em>syntax abstraction scenarios</em> that generics and functions cannot cover (such as generating <code>vec![]</code> literals).</p>
-<p><strong>Core advantages</strong>: Lightweight with no additional compilation dependencies, supporting syntax snippet-level reuse; <strong>Core limitations</strong>: Syntax is independent of Rust’s main syntax, error messages are obscure, and complex logic processing is not supported.</p>
-<h2 id="12-minimal-viable-macro-hello-macro-example"><a class="header" href="#12-minimal-viable-macro-hello-macro-example">1.2 Minimal Viable Macro: Hello Macro Example</a></h2>
-<p>Let’s start with the simplest macro to understand its basic structure. The following example implements a macro that prints fixed information:</p>
-<pre class="playground"><code class="language-rust edition2024">
-// Define a declarative macro
-macro_rules! hello_macro {
-    // Matching rule: no-argument pattern
-    () =&gt; {
-        // Expanded code
-        println!("Hello, Rust Declarative Macro!");
-    };
-}
-
-fn main() {
-    // Call the macro (parentheses are optional but recommended for consistency)
-    hello_macro!(); // Expands to println!(...) at compile time
-}</code></pre>
-<p>Code Explanation:</p>
+                        <h1 id="chapter-5-hand-on-project-build-a-configuration-derive-macro"><a class="header" href="#chapter-5-hand-on-project-build-a-configuration-derive-macro">Chapter 5: Hand-On Project: Build a Configuration Derive Macro</a></h1>
+<h2 id="51-project-overview"><a class="header" href="#51-project-overview">5.1 Project Overview</a></h2>
+<p>In this project, we’ll build a derive macro <code>#[Configurable]</code> that automatically generates code to load configuration values from environment variables into a struct. The macro will support custom environment variable names, default values, and type conversion (e.g., string to integer, boolean).</p>
+<p>Key features:</p>
 <ul>
 <li>
-<p><code>macro_rules! macro_name { ... }</code>: The <strong>fixed definition format</strong> for declarative macros.</p>
+<p>Derive <code>Configurable</code> for a struct to generate a <code>load()</code> method that populates fields from env vars.</p>
 </li>
 <li>
-<p><code>() =&gt; { ... }</code>: A matching arm. <code>()</code> is the pattern (representing a no-argument call), and the code block after <code>=&gt;</code> is expanded when the pattern matches successfully.</p>
+<p>Custom env var names via <code>#[config(env = "VAR_NAME")]</code>.</p>
 </li>
 <li>
-<p>Macro calls require <code>!</code>: Used to distinguish macros from functions/methods, informing the compiler to perform <em>macro expansion</em> here.</p>
+<p>Default values via <code>#[config(default = "value")]</code>.</p>
+</li>
+<li>
+<p>Type conversion for common types (<code>i32</code>, <code>u32</code>, <code>String</code>, <code>bool</code>, <code>f64</code>).</p>
+</li>
+<li>
+<p>Error handling for missing required variables (no default) or invalid type conversions.</p>
 </li>
 </ul>
-<h2 id="13-macro-matching-patterns-and-metavariables"><a class="header" href="#13-macro-matching-patterns-and-metavariables">1.3 Macro Matching Patterns and Metavariables</a></h2>
-<p>The core capability of macros is to match different syntax snippets, capture matched content via <strong>metavariables</strong>, and reuse it. Metavariables must specify a “fragment specifier” (such as expression, identifier, statement). Common fragment specifiers are as follows:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Fragment Specifier</th><th>Description</th><th>Example</th></tr>
-</thead>
-<tbody>
-<tr><td>expr</td><td>Any expression</td><td>1+2, foo(), x&gt;3</td></tr>
-<tr><td>ident</td><td>Identifier (variable name, function name, etc.)</td><td>x, hello_world, User</td></tr>
-<tr><td>stmt</td><td>Single statement</td><td>let a = 5;, foo();</td></tr>
-<tr><td>block</td><td>Code block</td><td>{ let a = 5; a+1; }</td></tr>
-<tr><td>ty</td><td>Type</td><td>i32, String, &amp;[u8]</td></tr>
-<tr><td>Example: Implement a macro that captures an expression and prints its content and result:</td><td></td><td></td></tr>
-</tbody>
-</table>
-</div>
-<pre class="playground"><code class="language-rust edition2024">
-macro_rules! print_expr {
-    // Match any expression, capture with $expr:expr, where $expr is the metavariable name
-    ($expr:expr) =&gt; {
-        println!("Expression `{} = {}`", stringify!($expr), $expr);
-    };
-}
-
-fn main() {
-    let x = 10;
-    print_expr!(x + 5); // Expands to println!("Expression `x + 5 = {}`", x + 5);
-    print_expr!(2 * 3 + 4); // Expands to the corresponding print statement
-}</code></pre>
-<p>Key Knowledge: <code>stringify!</code> is a <strong>built-in Rust macro</strong> that converts the syntax snippet corresponding to a metavariable into a string literal, commonly used for debugging or printing the expression itself.</p>
-<h2 id="14-chapter-exercises"><a class="header" href="#14-chapter-exercises">1.4 Chapter Exercises</a></h2>
+<h2 id="52-project-setup"><a class="header" href="#52-project-setup">5.2 Project Setup</a></h2>
+<p>We’ll create three crates:</p>
 <ol>
 <li>
-<p>Basic Exercise: Implement a <code>log_info!</code> macro that accepts any string literal and expands to <code>println!("[INFO] string content")</code>. Example call: <code>log_info!("Service started successfully")</code>.</p>
+<p><code>config-trait</code>: Defines the <code>Configurable</code> trait.</p>
 </li>
 <li>
-<p>Advanced Exercise: Implement a <code>swap!</code> macro that accepts two variables of the same type and expands to code that swaps their values (no need to consider ownership, only for primitive types). Example call: <code>swap!(a, b)</code>. After implementation, verify that <code>let mut a=1, b=2; swap!(a,b);</code> results in <code>a=2, b=1</code>.</p>
+<p><code>config-derive</code>: Proc-macro crate implementing the <code>#[derive(Configurable)]</code> macro.</p>
+</li>
+<li>
+<p><code>config-example</code>: Binary crate demonstrating usage.</p>
 </li>
 </ol>
+<h3 id="521-config-trait-crate"><a class="header" href="#521-config-trait-crate">5.2.1 config-trait Crate</a></h3>
+<pre><code class="language-toml">// config-trait/Cargo.toml
+[package]
+name = "config-trait"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0" # For custom error types
+
+</code></pre>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// config-trait/src/lib.rs
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ConfigError {
+    #[error("Environment variable '{0}' not found and no default provided")]
+    MissingVar(String),
+    
+    #[error("Failed to parse '{0}' as {1}: {2}")]
+    ParseError(String, String, String),
+}
+
+pub trait Configurable {
+    fn load() -&gt; Result&lt;Self, ConfigError&gt;
+    where
+        Self: Sized;
+}
+
+<span class="boring">}</span></code></pre>
+<h3 id="522-config-derive-crate"><a class="header" href="#522-config-derive-crate">5.2.2 config-derive Crate</a></h3>
+<pre><code class="language-toml">// config-derive/Cargo.toml
+[package]
+name = "config-derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+config-trait = { path = "../config-trait" }
+
+</code></pre>
+<h2 id="53-implementing-the-derive-macro"><a class="header" href="#53-implementing-the-derive-macro">5.3 Implementing the Derive Macro</a></h2>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// config-derive/src/lib.rs
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{
+    parse_macro_input, DeriveInput, Fields, Field, Ident, Lit, LitStr, Meta, MetaNameValue, NestedMeta,
+    Path, Type,
+};
+
+#[proc_macro_derive(Configurable, attributes(config))]
+pub fn derive_configurable(input: TokenStream) -&gt; TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let type_name = input.ident;
+    
+    let impl_block = match input.data {
+        syn::Data::Struct(data) =&gt; match data.fields {
+            Fields::Named(fields) =&gt; {
+                let field_code = fields.named.iter().map(|field| {
+                    generate_field_code(field)
+                });
+                
+                quote! {
+                    impl config_trait::Configurable for #type_name {
+                        fn load() -&gt; Result&lt;Self, config_trait::ConfigError&gt; {
+                            Ok(Self {
+                                #(#field_code),*
+                            })
+                        }
+                    }
+                }
+            }
+            _ =&gt; panic!("Configurable only supports structs with named fields"),
+        },
+        _ =&gt; panic!("Configurable only supports structs"),
+    };
+    
+    TokenStream::from(impl_block)
+}
+
+// Generate code for a single struct field
+fn generate_field_code(field: &amp;Field) -&gt; proc_macro2::TokenStream {
+    let field_name = field.ident.as_ref().unwrap();
+    let field_type = &amp;field.ty;
+    
+    // Extract config attributes (env, default)
+    let mut env_var = stringify!(#field_name).to_uppercase();
+    let mut default: Option&lt;LitStr&gt; = None;
+    
+    for attr in &amp;field.attrs {
+        if attr.path().is_ident("config") {
+            if let Ok(Meta::List(list)) = attr.parse_meta() {
+                for nested_meta in list.nested {
+                    if let NestedMeta::Meta(Meta::NameValue(nv)) = nested_meta {
+                        if nv.path.is_ident("env") {
+                            if let Lit::Str(lit_str) = nv.lit {
+                                env_var = lit_str.value();
+                            }
+                        } else if nv.path.is_ident("default") {
+                            if let Lit::Str(lit_str) = nv.lit {
+                                default = Some(lit_str);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Generate code to load the env var and parse it
+    let env_var_lit = LitStr::new(&amp;env_var, proc_macro2::Span::call_site());
+    let parse_code = generate_parse_code(field_type, &amp;env_var_lit);
+    
+    let load_code = if let Some(default_val) = default {
+        // Use default if env var is not set
+        quote! {
+            std::env::var(#env_var_lit)
+                .map_err(|_| config_trait::ConfigError::MissingVar(#env_var_lit.to_string()))
+                .and_then(|s| #parse_code)
+                .unwrap_or_else(|_| #parse_code.unwrap())
+        }
+    } else {
+        // Require env var to be set
+        quote! {
+            std::env::var(#env_var_lit)
+                .map_err(|_| config_trait::ConfigError::MissingVar(#env_var_lit.to_string()))
+                .and_then(|s| #parse_code)?
+        }
+    };
+    
+    quote! {
+        #field_name: #load_code
+    }
+}
+
+// Generate code to parse a string into the field type
+fn generate_parse_code(field_type: &amp;Type, env_var: &amp;LitStr) -&gt; proc_macro2::TokenStream {
+    match field_type {
+        Type::Path(path) if path.path.is_ident("String") =&gt; {
+            quote! { Ok(s) }
+        }
+        Type::Path(path) if path.path.is_ident("i32") =&gt; {
+            quote! {
+                s.parse::&lt;i32&gt;()
+                    .map_err(|e| config_trait::ConfigError::ParseError(
+                        #env_var.to_string(),
+                        "i32".to_string(),
+                        e.to_string()
+                    ))
+            }
+        }
+        Type::Path(path) if path.path.is_ident("u32") =&gt; {
+            quote! {
+                s.parse::&lt;u32&gt;()
+                    .map_err(|e| config_trait::ConfigError::ParseError(
+                        #env_var.to_string(),
+                        "u32".to_string(),
+                        e.to_string()
+                    ))
+            }
+        }
+        Type::Path(path) if path.path.is_ident("bool") =&gt; {
+            quote! {
+                s.parse::&lt;bool&gt;()
+                    .map_err(|e| config_trait::ConfigError::ParseError(
+                        #env_var.to_string(),
+                        "bool".to_string(),
+                        e.to_string()
+                    ))
+            }
+        }
+        Type::Path(path) if path.path.is_ident("f64") =&gt; {
+            quote! {
+                s.parse::&lt;f64&gt;()
+                    .map_err(|e| config_trait::ConfigError::ParseError(
+                        #env_var.to_string(),
+                        "f64".to_string(),
+                        e.to_string()
+                    ))
+            }
+        }
+        _ =&gt; panic!("Unsupported type for Configurable: {:?}", field_type),
+    }
+}
+
+<span class="boring">}</span></code></pre>
+<h2 id="54-testing-the-macro"><a class="header" href="#54-testing-the-macro">5.4 Testing the Macro</a></h2>
+<p>Create the <code>config-example</code> crate to test the macro:</p>
+<pre><code class="language-toml">// config-example/Cargo.toml
+[package]
+name = "config-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+config-trait = { path = "../config-trait" }
+config-derive = { path = "../config-derive" }
+
+</code></pre>
+<pre class="playground"><code class="language-rust edition2024">// config-example/src/main.rs
+use config_derive::Configurable;
+use config_trait::{Configurable, ConfigError};
+
+#[derive(Debug, Configurable)]
+struct AppConfig {
+    // Uses env var "APP_NAME" (default: "MyApp")
+    #[config(env = "APP_NAME", default = "MyApp")]
+    name: String,
+    
+    // Requires env var "PORT" (parses to u32)
+    port: u32,
+    
+    // Uses env var "DEBUG" (default: false)
+    #[config(default = "false")]
+    debug: bool,
+    
+    // Uses env var "MAX_RETRIES" (default: 3)
+    #[config(env = "MAX_RETRIES", default = "3")]
+    max_retries: i32,
+    
+    // Uses env var "TIMEOUT" (default: 2.5)
+    #[config(default = "2.5")]
+    timeout: f64,
+}
+
+fn main() -&gt; Result&lt;(), ConfigError&gt; {
+    // Set environment variables (in production, these would be set externally)
+    std::env::set_var("PORT", "8080");
+    std::env::set_var("DEBUG", "true");
+    
+    let config = AppConfig::load()?;
+    println!("Loaded config: {:?}", config);
+    
+    Ok(())
+}
+</code></pre>
+<p>Output:</p>
+<h2 id="55-extending-the-project"><a class="header" href="#55-extending-the-project">5.5 Extending the Project</a></h2>
+<p>Possible enhancements to the <code>Configurable</code> macro:</p>
+<ul>
+<li>
+<p>Support nested structs (load nested config from nested env vars, e.g., <code>DB_HOST</code> for <code>db.host</code>).</p>
+</li>
+<li>
+<p>Add validation (e.g., <code>#[config(min = 1024, max = 65535)]</code> for port numbers).</p>
+</li>
+<li>
+<p>Support loading from config files (JSON, YAML) in addition to environment variables.</p>
+</li>
+<li>
+<p>Add support for optional fields (e.g., <code>Option&lt;String&gt;</code>).</p>
+</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../declarative-macros/declarative-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../procedural-macros/function-like-procedural-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../procedural-macros/best-practices.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -268,11 +493,11 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../declarative-macros/declarative-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../procedural-macros/function-like-procedural-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../procedural-macros/best-practices.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

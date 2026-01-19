@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fundamentals of Declarative Macros - Rust Mastery</title>
+        <title>Derive Macros - Rust Mastery</title>
 
 
         <!-- Custom HTML head -->
@@ -177,76 +177,224 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="chapter-1-fundamentals-of-declarative-macros-nature-and-introduction"><a class="header" href="#chapter-1-fundamentals-of-declarative-macros-nature-and-introduction">Chapter 1: Fundamentals of Declarative Macros: Nature and Introduction</a></h1>
-<h2 id="11-core-definition-of-declarative-macros"><a class="header" href="#11-core-definition-of-declarative-macros">1.1 Core Definition of Declarative Macros</a></h2>
-<p>Declarative macros are syntax extension tools provided by Rust based on “pattern matching-code expansion”. Defined via the <code>macro_rules!</code> keyword, they essentially match, replace, and generate code snippets (TokenTree) at compile time, ultimately outputting code that conforms to Rust syntax. Unlike regular functions and generics, macros do not participate in runtime logic and only complete code transformation during the compilation phase. Thus, they can achieve <em>syntax abstraction scenarios</em> that generics and functions cannot cover (such as generating <code>vec![]</code> literals).</p>
-<p><strong>Core advantages</strong>: Lightweight with no additional compilation dependencies, supporting syntax snippet-level reuse; <strong>Core limitations</strong>: Syntax is independent of Rust’s main syntax, error messages are obscure, and complex logic processing is not supported.</p>
-<h2 id="12-minimal-viable-macro-hello-macro-example"><a class="header" href="#12-minimal-viable-macro-hello-macro-example">1.2 Minimal Viable Macro: Hello Macro Example</a></h2>
-<p>Let’s start with the simplest macro to understand its basic structure. The following example implements a macro that prints fixed information:</p>
-<pre class="playground"><code class="language-rust edition2024">
-// Define a declarative macro
-macro_rules! hello_macro {
-    // Matching rule: no-argument pattern
-    () =&gt; {
-        // Expanded code
-        println!("Hello, Rust Declarative Macro!");
+                        <h1 id="chapter-2-derive-macros"><a class="header" href="#chapter-2-derive-macros">Chapter 2: Derive Macros</a></h1>
+<h2 id="21-fundamentals-of-derive-macros"><a class="header" href="#21-fundamentals-of-derive-macros">2.1 Fundamentals of Derive Macros</a></h2>
+<p>Derive macros are the most common type of procedural macro. They allow users to automatically implement traits for their types by adding <code>#[derive(TraitName)]</code>. Under the hood, the derive macro parses the annotated type (struct/enum/union), generates the trait implementation code, and injects it into the compilation process.</p>
+<p>To define a derive macro, use the <code>#[proc_macro_derive(TraitName)]</code> attribute on a function. The function takes a <code>TokenStream</code> representing the annotated type, parses it with <code>syn</code>, generates the trait implementation with <code>quote</code>, and returns the generated <code>TokenStream</code>.</p>
+<h2 id="22-implementing-a-custom-derive-macro"><a class="header" href="#22-implementing-a-custom-derive-macro">2.2 Implementing a Custom Derive Macro</a></h2>
+<p>Let’s create a derive macro <code>MyDebug</code> that generates a simple debug implementation (similar to the built-in <code>Debug</code> trait). First, add the trait definition (in a separate crate or the same binary crate) and the derive macro in the proc-macro crate.</p>
+<p>Step 1: Define the <code>MyDebug</code> trait in a shared crate (e.g., <code>my-traits</code>):</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// my-traits/src/lib.rs
+pub trait MyDebug {
+    fn my_debug(&amp;self) -&gt; String;
+}
+
+<span class="boring">}</span></code></pre>
+<p>Step 2: Implement the derive macro in <code>my-proc-macros/src/lib.rs</code>:</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/lib.rs
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{parse_macro_input, DeriveInput, Fields, Ident};
+
+// Derive macro for MyDebug trait
+#[proc_macro_derive(MyDebug)]
+pub fn derive_my_debug(input: TokenStream) -&gt; TokenStream {
+    // Parse the input into a DeriveInput (represents a struct/enum/union)
+    let input = parse_macro_input!(input as DeriveInput);
+    
+    // Extract the name of the type (e.g., "User" for struct User { ... })
+    let type_name = input.ident;
+    
+    // Generate the trait implementation based on the type's fields
+    let impl_block = match input.data {
+        syn::Data::Struct(data) =&gt; match data.fields {
+            Fields::Named(fields) =&gt; {
+                // For structs with named fields (e.g., struct S { a: i32, b: String })
+                let field_names: Vec&lt;Ident&gt; = fields.named.iter()
+                    .map(|field| field.ident.as_ref().unwrap())
+                    .collect();
+                
+                quote! {
+                    impl MyDebug for #type_name {
+                        fn my_debug(&amp;self) -&gt; String {
+                            format!(
+                                "{} {{ {} }}",
+                                stringify!(#type_name),
+                                #(
+                                    format!("{}: {:?}", stringify!(#field_names), &amp;self.#field_names)
+                                ),*
+                            )
+                        }
+                    }
+                }
+            }
+            Fields::Unnamed(fields) =&gt; {
+                // For structs with unnamed fields (e.g., struct S(i32, String))
+                let field_indices: Vec&lt;usize&gt; = (0..fields.unnamed.len()).collect();
+                
+                quote! {
+                    impl MyDebug for #type_name {
+                        fn my_debug(&amp;self) -&gt; String {
+                            format!(
+                                "{}({})",
+                                stringify!(#type_name),
+                                #(
+                                    format!("{:?}", &amp;self.#field_indices)
+                                ),*
+                            )
+                        }
+                    }
+                }
+            }
+            Fields::Unit =&gt; {
+                // For unit structs (e.g., struct S;)
+                quote! {
+                    impl MyDebug for #type_name {
+                        fn my_debug(&amp;self) -&gt; String {
+                            stringify!(#type_name).to_string()
+                        }
+                    }
+                }
+            }
+        },
+        syn::Data::Enum(_) | syn::Data::Union(_) =&gt; {
+            // For simplicity, we'll only support structs in this example
+            panic!("MyDebug is only supported for structs");
+        }
     };
+    
+    TokenStream::from(impl_block)
+}
+
+<span class="boring">}</span></code></pre>
+<p>Step 3: Use the derive macro in a binary crate:</p>
+<pre class="playground"><code class="language-rust edition2024">// src/main.rs
+use my_proc_macros::MyDebug;
+use my_traits::MyDebug as MyDebugTrait;
+
+#[derive(MyDebug)]
+struct User {
+    name: String,
+    age: u32,
+}
+
+#[derive(MyDebug)]
+struct Point(i32, i32);
+
+#[derive(MyDebug)]
+struct Empty;
+
+fn main() {
+    let user = User { name: "Alice".to_string(), age: 30 };
+    println!("{}", user.my_debug()); // Prints "User { name: "Alice", age: 30 }"
+    
+    let point = Point(10, 20);
+    println!("{}", point.my_debug()); // Prints "Point(10, 20)"
+    
+    let empty = Empty;
+    println!("{}", empty.my_debug()); // Prints "Empty"
+}
+</code></pre>
+<h2 id="23-derive-macros-with-attributes"><a class="header" href="#23-derive-macros-with-attributes">2.3 Derive Macros with Attributes</a></h2>
+<p>You can extend derive macros to accept custom attributes (e.g., <code>#[my_debug(skip)]</code> on fields) to customize code generation. This requires using <code>#[proc_macro_derive(TraitName, attributes(attr_name))]</code> to declare the allowed attributes, then parsing those attributes with <code>syn</code>.</p>
+<p>Example: Modify <code>MyDebug</code> to skip fields annotated with <code>#[my_debug(skip)]</code>:</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// my-proc-macros/src/lib.rs
+use syn::{Meta, NestedMeta, Path};
+
+// Update the derive macro attribute to allow `my_debug` field attributes
+#[proc_macro_derive(MyDebug, attributes(my_debug))]
+pub fn derive_my_debug(input: TokenStream) -&gt; TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let type_name = input.ident;
+    
+    let impl_block = match input.data {
+        syn::Data::Struct(data) =&gt; match data.fields {
+            Fields::Named(fields) =&gt; {
+                let filtered_fields: Vec&lt;&amp;syn::Field&gt; = fields.named.iter()
+                    .filter(|field| !is_skip_field(field))
+                    .collect();
+                
+                let field_names: Vec&lt;Ident&gt; = filtered_fields.iter()
+                    .map(|field| field.ident.as_ref().unwrap())
+                    .collect();
+                
+                quote! {
+                    impl MyDebug for #type_name {
+                        fn my_debug(&amp;self) -&gt; String {
+                            format!(
+                                "{} {{ {} }}",
+                                stringify!(#type_name),
+                                #(
+                                    format!("{}: {:?}", stringify!(#field_names), &amp;self.#field_names)
+                                ),*
+                            )
+                        }
+                    }
+                }
+            }
+            // ... (keep Unnamed and Unit cases unchanged)
+        },
+        // ... (keep Enum/Union panic)
+    };
+    
+    TokenStream::from(impl_block)
+}
+
+// Helper function to check if a field has #[my_debug(skip)]
+fn is_skip_field(field: &amp;syn::Field) -&gt; bool {
+    for attr in &amp;field.attrs {
+        // Check if the attribute is `#[my_debug(...)]`
+        if attr.path().is_ident("my_debug") {
+            // Parse the attribute's arguments
+            if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
+                for nested_meta in meta_list.nested {
+                    if let NestedMeta::Meta(Meta::Path(path)) = nested_meta {
+                        if path.is_ident("skip") {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+<span class="boring">}</span></code></pre>
+<p>Use the <code>skip</code> attribute in the binary crate:</p>
+<pre class="playground"><code class="language-rust edition2024">#[derive(MyDebug)]
+struct User {
+    name: String,
+    #[my_debug(skip)]
+    password: String, // Skipped in my_debug output
+    age: u32,
 }
 
 fn main() {
-    // Call the macro (parentheses are optional but recommended for consistency)
-    hello_macro!(); // Expands to println!(...) at compile time
-}</code></pre>
-<p>Code Explanation:</p>
-<ul>
-<li>
-<p><code>macro_rules! macro_name { ... }</code>: The <strong>fixed definition format</strong> for declarative macros.</p>
-</li>
-<li>
-<p><code>() =&gt; { ... }</code>: A matching arm. <code>()</code> is the pattern (representing a no-argument call), and the code block after <code>=&gt;</code> is expanded when the pattern matches successfully.</p>
-</li>
-<li>
-<p>Macro calls require <code>!</code>: Used to distinguish macros from functions/methods, informing the compiler to perform <em>macro expansion</em> here.</p>
-</li>
-</ul>
-<h2 id="13-macro-matching-patterns-and-metavariables"><a class="header" href="#13-macro-matching-patterns-and-metavariables">1.3 Macro Matching Patterns and Metavariables</a></h2>
-<p>The core capability of macros is to match different syntax snippets, capture matched content via <strong>metavariables</strong>, and reuse it. Metavariables must specify a “fragment specifier” (such as expression, identifier, statement). Common fragment specifiers are as follows:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Fragment Specifier</th><th>Description</th><th>Example</th></tr>
-</thead>
-<tbody>
-<tr><td>expr</td><td>Any expression</td><td>1+2, foo(), x&gt;3</td></tr>
-<tr><td>ident</td><td>Identifier (variable name, function name, etc.)</td><td>x, hello_world, User</td></tr>
-<tr><td>stmt</td><td>Single statement</td><td>let a = 5;, foo();</td></tr>
-<tr><td>block</td><td>Code block</td><td>{ let a = 5; a+1; }</td></tr>
-<tr><td>ty</td><td>Type</td><td>i32, String, &amp;[u8]</td></tr>
-<tr><td>Example: Implement a macro that captures an expression and prints its content and result:</td><td></td><td></td></tr>
-</tbody>
-</table>
-</div>
-<pre class="playground"><code class="language-rust edition2024">
-macro_rules! print_expr {
-    // Match any expression, capture with $expr:expr, where $expr is the metavariable name
-    ($expr:expr) =&gt; {
-        println!("Expression `{} = {}`", stringify!($expr), $expr);
+    let user = User {
+        name: "Alice".to_string(),
+        password: "secret".to_string(),
+        age: 30,
     };
+    println!("{}", user.my_debug()); // Prints "User { name: "Alice", age: 30 }"
 }
-
-fn main() {
-    let x = 10;
-    print_expr!(x + 5); // Expands to println!("Expression `x + 5 = {}`", x + 5);
-    print_expr!(2 * 3 + 4); // Expands to the corresponding print statement
-}</code></pre>
-<p>Key Knowledge: <code>stringify!</code> is a <strong>built-in Rust macro</strong> that converts the syntax snippet corresponding to a metavariable into a string literal, commonly used for debugging or printing the expression itself.</p>
-<h2 id="14-chapter-exercises"><a class="header" href="#14-chapter-exercises">1.4 Chapter Exercises</a></h2>
+</code></pre>
+<h2 id="24-practice-exercises"><a class="header" href="#24-practice-exercises">2.4 Practice Exercises</a></h2>
 <ol>
 <li>
-<p>Basic Exercise: Implement a <code>log_info!</code> macro that accepts any string literal and expands to <code>println!("[INFO] string content")</code>. Example call: <code>log_info!("Service started successfully")</code>.</p>
+<p>Extend the <code>MyDebug</code> derive macro to support enums. For enums, generate a <code>my_debug</code> implementation that prints the variant name and its fields (if any).</p>
 </li>
 <li>
-<p>Advanced Exercise: Implement a <code>swap!</code> macro that accepts two variables of the same type and expands to code that swaps their values (no need to consider ownership, only for primitive types). Example call: <code>swap!(a, b)</code>. After implementation, verify that <code>let mut a=1, b=2; swap!(a,b);</code> results in <code>a=2, b=1</code>.</p>
+<p>Add a <code>#[my_debug(rename = "new_name")]</code> attribute to allow renaming fields in the <code>my_debug</code> output (e.g., <code>#[my_debug(rename = "full_name")] name: String</code> prints “full_name: …”).</p>
+</li>
+<li>
+<p>Create a derive macro <code>DefaultValue</code> that implements a trait <code>DefaultValue</code> with a method <code>default_value() -&gt; Self</code> returning a default instance of the type. For structs, use default values (0 for integers, empty strings for <code>String</code>, etc.).</p>
 </li>
 </ol>
 
@@ -254,11 +402,11 @@ fn main() {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../declarative-macros/declarative-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../procedural-macros/introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../procedural-macros/attribute-macros.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -268,11 +416,11 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../declarative-macros/declarative-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../procedural-macros/introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../procedural-macros/attribute-macros.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

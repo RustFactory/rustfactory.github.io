@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fundamentals of Declarative Macros - Rust Mastery</title>
+        <title>Introduction to Procedural Macros - Rust Mastery</title>
 
 
         <!-- Custom HTML head -->
@@ -177,76 +177,106 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="chapter-1-fundamentals-of-declarative-macros-nature-and-introduction"><a class="header" href="#chapter-1-fundamentals-of-declarative-macros-nature-and-introduction">Chapter 1: Fundamentals of Declarative Macros: Nature and Introduction</a></h1>
-<h2 id="11-core-definition-of-declarative-macros"><a class="header" href="#11-core-definition-of-declarative-macros">1.1 Core Definition of Declarative Macros</a></h2>
-<p>Declarative macros are syntax extension tools provided by Rust based on “pattern matching-code expansion”. Defined via the <code>macro_rules!</code> keyword, they essentially match, replace, and generate code snippets (TokenTree) at compile time, ultimately outputting code that conforms to Rust syntax. Unlike regular functions and generics, macros do not participate in runtime logic and only complete code transformation during the compilation phase. Thus, they can achieve <em>syntax abstraction scenarios</em> that generics and functions cannot cover (such as generating <code>vec![]</code> literals).</p>
-<p><strong>Core advantages</strong>: Lightweight with no additional compilation dependencies, supporting syntax snippet-level reuse; <strong>Core limitations</strong>: Syntax is independent of Rust’s main syntax, error messages are obscure, and complex logic processing is not supported.</p>
-<h2 id="12-minimal-viable-macro-hello-macro-example"><a class="header" href="#12-minimal-viable-macro-hello-macro-example">1.2 Minimal Viable Macro: Hello Macro Example</a></h2>
-<p>Let’s start with the simplest macro to understand its basic structure. The following example implements a macro that prints fixed information:</p>
-<pre class="playground"><code class="language-rust edition2024">
-// Define a declarative macro
-macro_rules! hello_macro {
-    // Matching rule: no-argument pattern
-    () =&gt; {
-        // Expanded code
-        println!("Hello, Rust Declarative Macro!");
-    };
-}
-
-fn main() {
-    // Call the macro (parentheses are optional but recommended for consistency)
-    hello_macro!(); // Expands to println!(...) at compile time
-}</code></pre>
-<p>Code Explanation:</p>
-<ul>
-<li>
-<p><code>macro_rules! macro_name { ... }</code>: The <strong>fixed definition format</strong> for declarative macros.</p>
-</li>
-<li>
-<p><code>() =&gt; { ... }</code>: A matching arm. <code>()</code> is the pattern (representing a no-argument call), and the code block after <code>=&gt;</code> is expanded when the pattern matches successfully.</p>
-</li>
-<li>
-<p>Macro calls require <code>!</code>: Used to distinguish macros from functions/methods, informing the compiler to perform <em>macro expansion</em> here.</p>
-</li>
-</ul>
-<h2 id="13-macro-matching-patterns-and-metavariables"><a class="header" href="#13-macro-matching-patterns-and-metavariables">1.3 Macro Matching Patterns and Metavariables</a></h2>
-<p>The core capability of macros is to match different syntax snippets, capture matched content via <strong>metavariables</strong>, and reuse it. Metavariables must specify a “fragment specifier” (such as expression, identifier, statement). Common fragment specifiers are as follows:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Fragment Specifier</th><th>Description</th><th>Example</th></tr>
-</thead>
-<tbody>
-<tr><td>expr</td><td>Any expression</td><td>1+2, foo(), x&gt;3</td></tr>
-<tr><td>ident</td><td>Identifier (variable name, function name, etc.)</td><td>x, hello_world, User</td></tr>
-<tr><td>stmt</td><td>Single statement</td><td>let a = 5;, foo();</td></tr>
-<tr><td>block</td><td>Code block</td><td>{ let a = 5; a+1; }</td></tr>
-<tr><td>ty</td><td>Type</td><td>i32, String, &amp;[u8]</td></tr>
-<tr><td>Example: Implement a macro that captures an expression and prints its content and result:</td><td></td><td></td></tr>
-</tbody>
-</table>
-</div>
-<pre class="playground"><code class="language-rust edition2024">
-macro_rules! print_expr {
-    // Match any expression, capture with $expr:expr, where $expr is the metavariable name
-    ($expr:expr) =&gt; {
-        println!("Expression `{} = {}`", stringify!($expr), $expr);
-    };
-}
-
-fn main() {
-    let x = 10;
-    print_expr!(x + 5); // Expands to println!("Expression `x + 5 = {}`", x + 5);
-    print_expr!(2 * 3 + 4); // Expands to the corresponding print statement
-}</code></pre>
-<p>Key Knowledge: <code>stringify!</code> is a <strong>built-in Rust macro</strong> that converts the syntax snippet corresponding to a metavariable into a string literal, commonly used for debugging or printing the expression itself.</p>
-<h2 id="14-chapter-exercises"><a class="header" href="#14-chapter-exercises">1.4 Chapter Exercises</a></h2>
+                        <h1 id="chapter-1-introduction-to-procedural-macros"><a class="header" href="#chapter-1-introduction-to-procedural-macros">Chapter 1: Introduction to Procedural Macros</a></h1>
+<h2 id="11-what-are-procedural-macros"><a class="header" href="#11-what-are-procedural-macros">1.1 What Are Procedural Macros?</a></h2>
+<p>Procedural macros are Rust functions annotated with special attributes that allow them to manipulate Rust code at compile time. They differ from declarative macros in two key ways: first, they use Rust’s full type system and logic capabilities (no limited pattern matching), and second, they operate on the <code>TokenStream</code> type (from the <code>proc_macro</code> crate), which represents the raw syntax of Rust code.</p>
+<p>When the Rust compiler encounters a procedural macro, it invokes the corresponding function, passes the tokens of the code the macro is applied to, and replaces the macro invocation with the token stream returned by the function. This compilation-time processing ensures that generated code is type-checked and optimized alongside handwritten code.</p>
+<h2 id="12-types-of-procedural-macros"><a class="header" href="#12-types-of-procedural-macros">1.2 Types of Procedural Macros</a></h2>
+<p>Rust defines three categories of procedural macros, each with a distinct purpose and application syntax:</p>
 <ol>
 <li>
-<p>Basic Exercise: Implement a <code>log_info!</code> macro that accepts any string literal and expands to <code>println!("[INFO] string content")</code>. Example call: <code>log_info!("Service started successfully")</code>.</p>
+<p><strong>Function-like Macros</strong>: Invoked like regular functions (e.g., <code>derive_json!(MyStruct)</code>). They take a token stream as input and return a token stream, with no restrictions on the input syntax (beyond being valid Rust tokens).</p>
 </li>
 <li>
-<p>Advanced Exercise: Implement a <code>swap!</code> macro that accepts two variables of the same type and expands to code that swaps their values (no need to consider ownership, only for primitive types). Example call: <code>swap!(a, b)</code>. After implementation, verify that <code>let mut a=1, b=2; swap!(a,b);</code> results in <code>a=2, b=1</code>.</p>
+<p><strong>Derive Macros</strong>: Applied via the <code>#[derive(MacroName)]</code> attribute on structs, enums, or unions. They generate trait implementations for the annotated type. Examples include <code>#[derive(Debug)]</code> (built-in) and <code>#[derive(Serialize)]</code> (from <code>serde</code>).</p>
+</li>
+<li>
+<p><strong>Attribute Macros</strong>: Applied as custom attributes (e.g., <code>#[route("/api/users")]</code>) on functions, structs, enums, modules, or traits. They can modify the annotated item or generate additional code alongside it.</p>
+</li>
+</ol>
+<h2 id="13-procedural-macro-crates"><a class="header" href="#13-procedural-macro-crates">1.3 Procedural Macro Crates</a></h2>
+<p>Procedural macros must be defined in a separate crate with the <code>proc-macro</code> crate type. This is a compiler requirement to isolate macro code (which runs at compile time) from the main application code (which runs at runtime). To create a procedural macro crate, add the following to <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[package]
+name = "my-proc-macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"  # Wrapper for proc_macro with additional features
+quote = "1.0"        # Converts Rust syntax trees to TokenStream
+syn = "2.0"          # Parses TokenStream into Rust syntax trees
+
+</code></pre>
+<p>Key dependencies:</p>
+<ul>
+<li>
+<p><code>proc-macro</code>: The standard library crate providing core procedural macro APIs (only available in proc-macro crates).</p>
+</li>
+<li>
+<p><code>proc-macro2</code>: A drop-in replacement for <code>proc-macro</code> that works in non-proc-macro crates, enabling code sharing.</p>
+</li>
+<li>
+<p><code>syn</code>: A parser that converts <code>TokenStream</code> into a structured syntax tree (AST) for easy manipulation.</p>
+</li>
+<li>
+<p><code>quote</code>: A crate that converts Rust AST nodes back into <code>TokenStream</code>, simplifying code generation.</p>
+</li>
+</ul>
+<h2 id="14-hello-procedural-macro"><a class="header" href="#14-hello-procedural-macro">1.4 Hello, Procedural Macro!</a></h2>
+<p>Let’s implement a simple function-like procedural macro that generates a greeting function. First, create the proc-macro crate (as above), then add the following code to <code>src/lib.rs</code>:</p>
+<pre class="playground"><code class="language-rust edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/lib.rs
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{parse_macro_input, LitStr};
+
+#[proc_macro]
+pub fn greet(input: TokenStream) -&gt; TokenStream {
+    // Parse the input token stream as a string literal
+    let name = parse_macro_input!(input as LitStr);
+    
+    // Generate Rust code: a function that prints a greeting
+    let expanded = quote! {
+        fn say_hello() {
+            println!("Hello, {}!", #name);
+        }
+    };
+    
+    // Convert the generated syntax tree back to TokenStream
+    TokenStream::from(expanded)
+}
+
+<span class="boring">}</span></code></pre>
+<p>To use this macro in a separate binary crate, add the proc-macro crate as a dependency in <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+my-proc-macros = { path = "../my-proc-macros" }
+
+</code></pre>
+<p>Then invoke the macro in <code>src/main.rs</code>:</p>
+<pre class="playground"><code class="language-rust edition2024">// src/main.rs
+use my_proc_macros::greet;
+
+greet!("Alice");
+
+fn main() {
+    say_hello(); // Prints "Hello, Alice!"
+}
+</code></pre>
+<p>When compiled, the <code>greet!("Alice")</code> invocation is replaced with the <code>say_hello</code> function generated by the macro. The compiler type-checks the generated code, so if you pass an invalid input (e.g., a number instead of a string), <code>syn</code> will return a compile error.</p>
+<h2 id="15-practice-exercises"><a class="header" href="#15-practice-exercises">1.5 Practice Exercises</a></h2>
+<ol>
+<li>
+<p>Modify the <code>greet</code> macro to accept two string literals (name and greeting) and generate a function that prints the custom greeting (e.g., <code>greet!("Hello", "Bob")</code> generates a function that prints “Hello, Bob!”).</p>
+</li>
+<li>
+<p>Create a function-like macro <code>add_one</code> that takes an integer literal (e.g., <code>add_one!(5)</code>) and generates a constant with the value incremented by 1 (e.g., <code>const ADD_ONE: i32 = 6;</code>).</p>
+</li>
+<li>
+<p>Explain why procedural macros require a separate crate. What would happen if they were allowed in regular crates?</p>
 </li>
 </ol>
 
@@ -254,11 +284,11 @@ fn main() {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../declarative-macros/declarative-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../procedural-macros/procedural-macros.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../procedural-macros/derive-macros.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -268,11 +298,11 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../declarative-macros/declarative-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../procedural-macros/procedural-macros.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../declarative-macros/adavanced.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../procedural-macros/derive-macros.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
